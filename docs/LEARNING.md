@@ -1,7 +1,7 @@
 # Learning guide: Apache Airflow 3 through one small pipeline
 
 This repo doubles as a hands-on Airflow course. Every day the pipeline fetches hourly
-wave data for a few East Coast spots from the free
+wave data for four surf breaks (Cape Cod, Bali, Morocco, Hawaii) from the free
 [Open-Meteo Marine API](https://open-meteo.com/en/docs/marine-weather-api), rates each hour
 (FLAT / POOR / FAIR / GOOD / HAZARDOUS), loads it into SQLite, writes a "should I go
 surf?" report, and publishes to S3 for the dashboard.

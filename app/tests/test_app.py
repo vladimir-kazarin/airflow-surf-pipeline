@@ -21,11 +21,15 @@ def test_app_renders_without_errors(app):
     assert app.title[0].value == "🌊 Surf Window"
 
 
-def test_app_shows_a_tile_per_spot(app):
-    assert len(app.metric) == 4
+def test_app_shows_one_card_per_spot(app):
+    history_buttons = [b for b in app.button if b.key and b.key.startswith("history-")]
+    assert len(history_buttons) == 4
 
 
-def test_changing_spot_rerenders(app):
-    app.segmented_control(key="focus").set_value("Rockaway").run()
+def test_headline_names_a_spot(app):
+    assert any("Best bet" in m.value or "least bad" in m.value for m in app.markdown)
+
+
+def test_opening_history_dialog_renders(app):
+    app.button(key="history-Bali").click().run()
     assert not app.exception
-    assert any("Rockaway vs. the other spots" in m.value for m in app.markdown)

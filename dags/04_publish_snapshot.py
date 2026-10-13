@@ -61,8 +61,16 @@ def publish_snapshot():
         return bucket
 
     @task
-    def write_partitions(bucket: str) -> list[str]:
-        rows = SqliteHook(sqlite_conn_id=DB_CONN_ID).get_records(ALL_ROWS)
+    def get_spots() -> list[dict]:
+        return Variable.get("surf_spots", deserialize_json=True)
+
+    @task
+    def write_partitions(bucket: str, spots: list[dict]) -> list[str]:
+        names = [s["name"] for s in spots]
+        placeholders = ", ".join("?" for _ in names)
+        rows = SqliteHook(sqlite_conn_id=DB_CONN_ID).get_records(
+            f"{ALL_ROWS} WHERE spot IN ({placeholders})", parameters=names
+        )
         by_day = publish.group_by_day(rows)
         # Event-triggered: only the days that changed. Manual / CI run: every day in the DB.
         days = sorted(_changed_days() & by_day.keys() or by_day.keys())
@@ -79,10 +87,12 @@ def publish_snapshot():
         return days
 
     @task
-    def build_serving(bucket: str, days: list[str]) -> dict:
+    def build_serving(bucket: str, days: list[str], spots: list[dict]) -> dict:
         s3 = S3Hook(aws_conn_id=AWS_CONN_ID)
         keys = sorted(s3.list_keys(bucket_name=bucket, prefix=publish.CONDITIONS_PREFIX))
-        rows = [row for key in keys for row in publish.parse_csv(s3.read_key(key, bucket))]
+        all_rows = [row for key in keys for row in publish.parse_csv(s3.read_key(key, bucket))]
+        # Older partitions may still hold spots that were removed from the config.
+        rows = publish.only_spots(all_rows, (s["name"] for s in spots))
 
         ctx = get_current_context()
         now = pendulum.now("UTC").isoformat(timespec="seconds")
@@ -91,6 +101,7 @@ def publish_snapshot():
             generated_at=now,
             source=Variable.get("surf_publish_source", default="local"),
             run_id=ctx["run_id"],
+            spot_info=spots,
         )
         s3.load_string(
             publish.to_csv([r[c] for c in storage.COLUMNS] for r in rows),
@@ -122,7 +133,8 @@ def publish_snapshot():
         return meta
 
     bucket = get_bucket()
-    build_serving(bucket, write_partitions(bucket))
+    spots = get_spots()
+    build_serving(bucket, write_partitions(bucket, spots), spots)
 
 
 publish_snapshot()

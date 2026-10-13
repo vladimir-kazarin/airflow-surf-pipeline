@@ -41,6 +41,22 @@ def test_build_meta():
     assert json.loads(publish.to_json(meta)) == meta
 
 
+def test_only_spots_drops_spots_removed_from_config():
+    rows = publish.parse_csv(publish.to_csv(ROWS))
+    kept = publish.only_spots(rows, ["Rockaway"])
+    assert [r["spot"] for r in kept] == ["Rockaway"]
+
+
+def test_build_meta_carries_spot_display_info_only():
+    spot = {"name": "Bali", "break": "Uluwatu", "timezone": "Asia/Makassar",
+            "latitude": -8.8, "longitude": 115.1, "internal": "dropped"}
+    meta = publish.build_meta([], "now", "ci", "r1", spot_info=[spot])
+    assert meta["spot_info"] == [
+        {"name": "Bali", "break": "Uluwatu", "timezone": "Asia/Makassar",
+         "latitude": -8.8, "longitude": 115.1}
+    ]
+
+
 def test_build_meta_handles_no_rows():
     assert publish.build_meta([], "now", "ci", "r1")["last_day"] is None
 

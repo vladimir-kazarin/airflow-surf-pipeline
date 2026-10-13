@@ -3,7 +3,7 @@ import transforms
 
 RAW = pd.DataFrame(
     {
-        "spot": ["Montauk", "Montauk", "Rockaway", "Montauk"],
+        "spot": ["Bali", "Bali", "Hawaii", "Bali"],
         "ts": ["2026-10-11T06:00", "2026-10-12T06:00", "2026-10-12T07:00", "2026-10-12T07:00"],
         "wave_height": ["0.9", "1.2", "1.5", "0.3"],
         "wave_period": ["8.0", "11.0", "5.0", "4.0"],
@@ -11,6 +11,10 @@ RAW = pd.DataFrame(
         "rating": ["FAIR", "GOOD", "POOR", "FLAT"],
     }
 )
+SPOT_INFO = [
+    {"name": "Bali", "break": "Uluwatu", "timezone": "Asia/Makassar"},
+    {"name": "Hawaii", "break": "Pipeline", "timezone": "Pacific/Honolulu"},
+]
 
 
 def test_prepare_types_columns_without_mutating_input():
@@ -26,25 +30,39 @@ def test_prepare_types_columns_without_mutating_input():
 
 def test_daily_summary_counts_surfable_hours_per_spot_and_day():
     daily = transforms.daily_summary(transforms.prepare(RAW))
-    montauk_12 = daily[(daily["spot"] == "Montauk") & (daily["day"] == "2026-10-12")].iloc[0]
+    bali_12 = daily[(daily["spot"] == "Bali") & (daily["day"] == "2026-10-12")].iloc[0]
 
-    assert montauk_12["max_height"] == 1.2
-    assert montauk_12["surfable_hours"] == 1
+    assert bali_12["max_height"] == 1.2
+    assert bali_12["surfable_hours"] == 1
 
 
-def test_best_sessions_and_verdict_for_latest_day():
+def test_local_time_converts_from_utc():
+    assert transforms.local_time("2026-10-12T06:00", "Asia/Makassar") == "14:00"  # UTC+8
+    assert transforms.local_time("2026-10-12T06:00", "Pacific/Honolulu") == "20:00"  # UTC-10, previous day
+    assert transforms.local_time("2026-10-12T06:00", None) == "06:00 UTC"
+
+
+def test_spot_cards_merge_display_info_in_best_first_order():
     conditions = transforms.prepare(RAW)
     sessions = transforms.best_sessions_on(conditions, transforms.latest_day(conditions))
 
-    assert [s["spot"] for s in sessions] == ["Montauk", "Rockaway"]
-    assert transforms.verdict(sessions).startswith("Go surf at Montauk around 06:00")
+    cards = transforms.spot_cards(sessions, SPOT_INFO)
+
+    assert [(c["spot"], c["break"], c["local_time"]) for c in cards] == [
+        ("Bali", "Uluwatu", "14:00"),
+        ("Hawaii", "Pipeline", "21:00"),
+    ]
 
 
-def test_verdict_when_nothing_is_surfable():
-    assert "Nothing worth paddling out" in transforms.verdict([{"rating": "POOR"}])
+def test_spot_cards_tolerate_missing_spot_info():
+    conditions = transforms.prepare(RAW)
+    sessions = transforms.best_sessions_on(conditions, transforms.latest_day(conditions))
+    assert transforms.spot_cards(sessions, [])[0]["local_time"].endswith("UTC")
 
 
-def test_last_n_days():
+def test_spot_series_limits_to_last_n_days_for_one_spot():
     daily = transforms.daily_summary(transforms.prepare(RAW))
-    assert set(transforms.last_n_days(daily, 1)["day"].dt.day) == {12}
-    assert len(transforms.last_n_days(daily, None)) == len(daily)
+
+    assert set(transforms.spot_series(daily, "Bali", 1)["day"].dt.day) == {12}
+    assert len(transforms.spot_series(daily, "Bali", None)) == 2
+    assert transforms.spot_series(daily, "Nowhere", 30).empty

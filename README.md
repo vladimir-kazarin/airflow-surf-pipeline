@@ -4,9 +4,13 @@
 [![Daily pipeline](https://github.com/vladimir-kazarin/airflow-surf-pipeline/actions/workflows/daily-pipeline.yml/badge.svg)](https://github.com/vladimir-kazarin/airflow-surf-pipeline/actions/workflows/daily-pipeline.yml)
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://airflow-surf-pipeline.streamlit.app)
 
-A daily pipeline that pulls hourly ocean-wave data for four East Coast surf spots, rates
-every hour for surfability, validates it, stores it in S3 as one partition per day, and
-serves it on a live Streamlit dashboard.
+A daily pipeline that pulls hourly ocean-wave data for four surf breaks around the world
+(Cape Cod, Bali, Morocco and Hawaii), rates every hour for surfability, validates it,
+stores it in S3 as one partition per day, and serves it on a live Streamlit dashboard
+with each spot's best session in local time.
+
+Spots are configuration, not code: edit `AIRFLOW_VAR_SURF_SPOTS` in `env.sh` (name,
+break, coordinates, timezone) and the DAGs fan out over the new list.
 
 **[Live dashboard →](https://airflow-surf-pipeline.streamlit.app)**
 
@@ -23,7 +27,7 @@ serves it on a live Streamlit dashboard.
 | **Idempotency** | Primary-key upserts locally; one S3 object per day, so re-processing a day overwrites exactly that object. The daily job re-runs the last 3 days, so missed days self-heal. |
 | **Cloud + security** | S3 (private, versioned, encrypted). GitHub Actions authenticates with **OIDC** (no stored AWS keys) to a role usable only from `main`. The dashboard uses a read-only key scoped to `serving/*`. |
 | **Infrastructure as code** | Terraform for the bucket, OIDC role and dashboard user |
-| **Testing & CI** | 37 tests: pipeline logic, DAG integrity (DagBag), dashboard transforms, and a headless Streamlit `AppTest` smoke test. Terraform fmt/validate in CI. |
+| **Testing & CI** | 41 tests: pipeline logic, DAG integrity (DagBag), dashboard transforms, and a headless Streamlit `AppTest` smoke test. Terraform fmt/validate in CI. |
 
 ## Architecture
 

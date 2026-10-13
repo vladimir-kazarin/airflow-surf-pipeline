@@ -1,15 +1,45 @@
 {
-  "generated_at": "2026-10-13T23:01:53+00:00",
+  "generated_at": "2026-10-13T23:39:58+00:00",
   "source": "local",
-  "run_id": "asset_triggered__2026-10-13T23:01:06.264453+00:00_e34Wkfj9",
+  "run_id": "asset_triggered__2026-10-13T23:39:34.742910+00:00_tDJ4pMXZ",
   "first_day": "2026-07-01",
   "last_day": "2026-10-12",
   "days": 104,
   "spots": [
-    "Cocoa Beach",
-    "Montauk",
-    "Outer Banks",
-    "Rockaway"
+    "Bali",
+    "Cape Cod",
+    "Hawaii",
+    "Morocco"
   ],
-  "rows": 9984
+  "rows": 9984,
+  "spot_info": [
+    {
+      "name": "Cape Cod",
+      "break": "Nauset Beach",
+      "timezone": "America/New_York",
+      "latitude": 41.79,
+      "longitude": -69.93
+    },
+    {
+      "name": "Bali",
+      "break": "Uluwatu",
+      "timezone": "Asia/Makassar",
+      "latitude": -8.815,
+      "longitude": 115.085
+    },
+    {
+      "name": "Morocco",
+      "break": "Taghazout",
+      "timezone": "Africa/Casablanca",
+      "latitude": 30.545,
+      "longitude": -9.715
+    },
+    {
+      "name": "Hawaii",
+      "break": "Banzai Pipeline, O\u02bbahu",
+      "timezone": "Pacific/Honolulu",
+      "latitude": 21.665,
+      "longitude": -158.054
+    }
+  ]
 }

@@ -11,13 +11,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dags"))
 import charts  # noqa: E402
 import transforms  # noqa: E402
 from data import SOURCE_S3, Dataset, load_dataset  # noqa: E402
+from surf_lib import report  # noqa: E402
 
 REPO_URL = "https://github.com/vladimir-kazarin/airflow-surf-pipeline"
 CACHE_TTL_SECONDS = 60 * 60
-RANGE_OPTIONS = {"30 days": 30, "60 days": 60, "90 days": 90, "All": None}
-RECENT_RUNS_SHOWN = 15
+SPARKLINE_DAYS = 30
+CARD_COLUMNS = 2
+HISTORY_RANGES = {"30 days": 30, "90 days": 90, "All": None}
+# Rating badges always show the word; color only reinforces it.
+RATING_BADGE = {
+    "GOOD": {"color": "green", "icon": None},
+    "FAIR": {"color": "blue", "icon": None},
+    "POOR": {"color": "gray", "icon": None},
+    "FLAT": {"color": "gray", "icon": None},
+    "HAZARDOUS": {"color": "red", "icon": ":material/warning:"},
+}
 
-st.set_page_config(page_title="Surf Window · Airflow pipeline", page_icon="🌊", layout="wide")
+st.set_page_config(page_title="Surf Window", page_icon="🌊", layout="centered")
 
 
 @st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner="Loading surf data…")
@@ -26,100 +36,90 @@ def get_dataset() -> Dataset:
 
 
 def theme_mode() -> str:
-    return "dark" if (st.context.theme.get("type") == "dark") else "light"
+    return "dark" if st.context.theme.get("type") == "dark" else "light"
 
 
-def render_header(dataset: Dataset) -> None:
-    meta = dataset.meta
-    st.title("🌊 Surf Window")
-    st.markdown(
-        "Daily wave conditions for four East Coast surf spots, produced by an "
-        f"**Apache Airflow 3** pipeline and published to **Amazon S3**. [Source on GitHub]({REPO_URL})"
-    )
-    source = "live from S3" if dataset.source == SOURCE_S3 else dataset.source
-    st.caption(
-        f"Data through **{meta['last_day']}** · {meta['days']} days · {meta['rows']:,} hourly rows · "
-        f"published {meta['generated_at'].replace('T', ' ')[:16]} UTC by `{meta['source']}` · {source}"
-    )
-    if dataset.warning:
-        st.warning(dataset.warning, icon="⚠️")
+def rating_badge(container, rating: str) -> None:
+    style = RATING_BADGE.get(rating, RATING_BADGE["POOR"])
+    container.badge(rating.title(), color=style["color"], icon=style["icon"])
 
 
-def render_latest(conditions, sessions: list[dict]) -> None:
-    day = transforms.latest_day(conditions)
-    st.subheader(f"Best sessions on {day:%A, %B %d}")
-    st.markdown(f"**{transforms.verdict(sessions)}**")
-
-    columns = st.columns(len(sessions))
-    for column, session in zip(columns, sessions):
-        column.metric(
-            label=session["spot"],
-            value=f"{session['wave_height']:.1f} m @ {session['wave_period']:.0f} s",
-            border=True,
-        )
-        column.caption(f"{session['rating']} · best around {session['ts'][11:16]} UTC")
-
-
-def render_history(conditions, mode: str, default_focus: str) -> None:
-    daily = transforms.daily_summary(conditions)
-    spots = sorted(daily["spot"].unique())
-
-    # One filter row scopes every chart below it.
-    left, right = st.columns([3, 2])
-    focus = left.segmented_control("Spot", spots, default=default_focus, key="focus") or default_focus
-    window = right.segmented_control("Range", list(RANGE_OPTIONS), default="90 days", key="range") or "90 days"
-    shown = transforms.last_n_days(daily, RANGE_OPTIONS[window])
-
-    st.markdown(f"#### Daily max wave height: {focus} vs. the other spots")
-    st.altair_chart(charts.height_trend(shown, focus, mode), width="stretch")
-
-    st.markdown("#### Surfable hours per day (FAIR or GOOD)")
-    st.altair_chart(charts.surfable_heatmap(shown, mode), width="stretch")
-
-    with st.expander("Show the data behind these charts"):
+@st.dialog("Wave history", width="large")
+def show_history(card: dict, daily, mode: str) -> None:
+    st.markdown(f"**{card['spot']}** · {card['break']}")
+    window = st.segmented_control("Range", list(HISTORY_RANGES), default="90 days", label_visibility="collapsed")
+    series = transforms.spot_series(daily, card["spot"], HISTORY_RANGES[window or "90 days"])
+    st.altair_chart(charts.history(series, mode), width="stretch")
+    if st.toggle("Show data"):
         st.dataframe(
-            shown.sort_values(["day", "spot"], ascending=[False, True]),
+            series.sort_values("day", ascending=False).drop(columns="spot"),
             hide_index=True,
             width="stretch",
             column_config={"day": st.column_config.DateColumn("Day")},
         )
 
 
-def render_how_its_built(dataset: Dataset, mode: str) -> None:
-    st.markdown("### Architecture")
-    st.graphviz_chart(charts.architecture(mode), width="stretch")
-    st.markdown(
-        """
-- **Orchestration:** Apache Airflow 3. A daily ETL DAG with an HTTP sensor, one mapped task per surf spot,
-  retries with exponential backoff, a data-quality gate and an idempotent load.
-- **Data-aware scheduling:** the load emits an **Asset** event; the report and publish DAGs run because
-  data changed, not because a clock ticked.
-- **Storage:** one CSV per day in S3 (re-running a day overwrites exactly that object), plus a compacted
-  serving file and `meta.json` that this app reads.
-- **Runs daily on GitHub Actions:** the workflow assumes an AWS role via **OIDC** (no stored AWS keys),
-  re-processes the last 3 days (idempotency makes missed days self-heal) and publishes.
-- **Infrastructure as code:** bucket, OIDC role and this app's read-only user are defined in Terraform.
-        """
+def render_card(card: dict, daily, mode: str) -> None:
+    with st.container(border=True):
+        header = st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="top")
+        header.markdown(f"**{card['spot']}**  \n:gray[{card['break']}]")
+        rating_badge(header, card["rating"])
+
+        st.markdown(f"### {card['wave_height']:.1f} m :gray[· {card['wave_period']:.0f} s]")
+        st.caption(f"Best around {card['local_time']} local")
+
+        recent = transforms.spot_series(daily, card["spot"], SPARKLINE_DAYS)
+        st.altair_chart(charts.sparkline(recent, mode), width="stretch")
+        if st.button("History", key=f"history-{card['spot']}", type="tertiary", icon=":material/show_chart:"):
+            show_history(card, daily, mode)
+
+
+def render_footer(dataset: Dataset, mode: str) -> None:
+    meta = dataset.meta
+    source = "live from S3" if dataset.source == SOURCE_S3 else dataset.source
+    st.divider()
+    st.caption(
+        f"Updated {meta['generated_at'][:10]} by `{meta['source']}` · {source} · "
+        f"{meta['days']} days of hourly data · [Source on GitHub]({REPO_URL})"
     )
-    st.markdown("### Recent pipeline runs")
-    runs = dataset.runs.sort_values("published_at", ascending=False).head(RECENT_RUNS_SHOWN)
-    st.dataframe(runs, hide_index=True, width="stretch")
+    with st.expander("How this works"):
+        st.graphviz_chart(charts.architecture(mode), width="stretch")
+        st.markdown(
+            "An **Apache Airflow 3** DAG fetches hourly wave data every day, rates each hour, "
+            "validates it and loads it. Its **Asset** event triggers a second DAG that publishes "
+            "one file per day to **Amazon S3**. In production it runs on **GitHub Actions** with "
+            "OIDC (no stored keys); infrastructure is **Terraform**. Ratings use wave height and "
+            "period: *Good* is 0.8–2.5 m with a 10 s+ period."
+        )
 
 
 def main() -> None:
     dataset = get_dataset()
     conditions = transforms.prepare(dataset.conditions)
-    render_header(dataset)
+    daily = transforms.daily_summary(conditions)
+    day = transforms.latest_day(conditions)
+    cards = transforms.spot_cards(
+        transforms.best_sessions_on(conditions, day), dataset.meta.get("spot_info", [])
+    )
+    mode = theme_mode()
 
-    conditions_tab, built_tab = st.tabs(["Conditions", "How it's built"])
-    sessions = transforms.best_sessions_on(conditions, transforms.latest_day(conditions))
-    with conditions_tab:
-        render_latest(conditions, sessions)
-        st.divider()
-        # Open on the spot with the best latest session: the most interesting line.
-        render_history(conditions, theme_mode(), default_focus=sessions[0]["spot"])
-    with built_tab:
-        render_how_its_built(dataset, theme_mode())
+    st.title("🌊 Surf Window")
+    st.caption(f"Surf conditions around the world · {day:%A, %B %-d}")
+    if dataset.warning:
+        st.warning(dataset.warning, icon=":material/cloud_off:")
+
+    best = cards[0]
+    if report.has_surfable(cards):
+        st.markdown(f"Best bet: **{best['spot']}**, {best['rating'].lower()} around {best['local_time']} local.")
+    else:
+        st.markdown(f"No surfable waves anywhere. **{best['spot']}** is the least bad.")
+
+    for start in range(0, len(cards), CARD_COLUMNS):
+        for column, card in zip(st.columns(CARD_COLUMNS), cards[start : start + CARD_COLUMNS]):
+            with column:
+                render_card(card, daily, mode)
+
+    render_footer(dataset, mode)
 
 
 main()

@@ -31,11 +31,13 @@ export AIRFLOW_CONN_SURF_DB="{\"conn_type\": \"sqlite\", \"host\": \"$PROJECT_DI
 # AIRFLOW_VAR_<KEY> defines a Variable. Edit the spots here and restart, and
 # the pipeline fans out over the new list. (Env-var Variables take precedence
 # over ones created in the UI, so change them here, not in Admin -> Variables.)
+# `break` and `timezone` are display metadata: DAG 04 publishes them in meta.json
+# so the dashboard can show each spot's best hour in local time.
 export AIRFLOW_VAR_SURF_SPOTS='[
-  {"name": "Montauk",      "latitude": 41.03, "longitude": -71.93},
-  {"name": "Rockaway",     "latitude": 40.58, "longitude": -73.82},
-  {"name": "Outer Banks",  "latitude": 35.56, "longitude": -75.46},
-  {"name": "Cocoa Beach",  "latitude": 28.32, "longitude": -80.60}
+  {"name": "Cape Cod", "break": "Nauset Beach",          "latitude": 41.79,  "longitude": -69.93,   "timezone": "America/New_York"},
+  {"name": "Bali",     "break": "Uluwatu",               "latitude": -8.815, "longitude": 115.085,  "timezone": "Asia/Makassar"},
+  {"name": "Morocco",  "break": "Taghazout",             "latitude": 30.545, "longitude": -9.715,   "timezone": "Africa/Casablanca"},
+  {"name": "Hawaii",   "break": "Banzai Pipeline, Oʻahu", "latitude": 21.665, "longitude": -158.054, "timezone": "Pacific/Honolulu"}
 ]'
 export AIRFLOW_VAR_SURF_REPORT_DIR="$PROJECT_DIR/data/reports"
 

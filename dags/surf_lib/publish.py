@@ -49,7 +49,22 @@ def parse_csv(text: str) -> list[dict]:
     return list(csv.DictReader(io.StringIO(text)))
 
 
-def build_meta(rows: list[dict], generated_at: str, source: str, run_id: str) -> dict:
+SPOT_INFO_FIELDS = ("name", "break", "timezone", "latitude", "longitude")
+
+
+def only_spots(rows: Iterable[dict], spot_names: Iterable[str]) -> list[dict]:
+    """Keep rows for currently configured spots, so removed spots drop out of the dataset."""
+    wanted = set(spot_names)
+    return [r for r in rows if r["spot"] in wanted]
+
+
+def build_meta(
+    rows: list[dict],
+    generated_at: str,
+    source: str,
+    run_id: str,
+    spot_info: list[dict] | None = None,
+) -> dict:
     days = sorted({r["ts"][:10] for r in rows})
     return {
         "generated_at": generated_at,
@@ -60,6 +75,8 @@ def build_meta(rows: list[dict], generated_at: str, source: str, run_id: str) ->
         "days": len(days),
         "spots": sorted({r["spot"] for r in rows}),
         "rows": len(rows),
+        # Display metadata (break name, local timezone) for the dashboard.
+        "spot_info": [{f: s.get(f) for f in SPOT_INFO_FIELDS} for s in spot_info or []],
     }
 
 

@@ -1,9 +1,13 @@
 """Pure pandas transforms for the dashboard (no Streamlit, easy to test)."""
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pandas as pd
 from surf_lib import report
 
 NUMERIC_COLUMNS = ("wave_height", "wave_period", "wave_direction")
+UTC = ZoneInfo("UTC")
 
 
 def prepare(raw: pd.DataFrame) -> pd.DataFrame:
@@ -48,15 +52,34 @@ def best_sessions_on(conditions: pd.DataFrame, day: pd.Timestamp) -> list[dict]:
     return report.best_sessions(list(records))
 
 
-def verdict(sessions: list[dict]) -> str:
-    if not report.has_surfable(sessions):
-        return "Nothing worth paddling out for. Wax the board and wait for swell."
-    top = sessions[0]
-    return f"Go surf at {top['spot']} around {top['ts'][11:16]} UTC ({top['rating']})"
+def local_time(ts_utc: str, timezone: str | None) -> str:
+    """'2026-10-12T06:00' (UTC) -> '14:00' in the spot's timezone ('06:00 UTC' if unknown)."""
+    moment = datetime.fromisoformat(ts_utc).replace(tzinfo=UTC)
+    if not timezone:
+        return f"{moment:%H:%M} UTC"
+    return f"{moment.astimezone(ZoneInfo(timezone)):%H:%M}"
 
 
-def last_n_days(frame: pd.DataFrame, days: int | None) -> pd.DataFrame:
-    if days is None:
-        return frame
-    cutoff = frame["day"].max() - pd.Timedelta(days=days - 1)
-    return frame.loc[frame["day"] >= cutoff]
+def spot_cards(sessions: list[dict], spot_info: list[dict]) -> list[dict]:
+    """Merge each spot's best session with its display info, keeping best-first order."""
+    info_by_name = {s["name"]: s for s in spot_info}
+    cards = []
+    for session in sessions:
+        info = info_by_name.get(session["spot"], {})
+        cards.append(
+            {
+                **session,
+                "break": info.get("break") or "",
+                "local_time": local_time(session["ts"], info.get("timezone")),
+            }
+        )
+    return cards
+
+
+def spot_series(daily: pd.DataFrame, spot: str, days: int | None) -> pd.DataFrame:
+    """One spot's daily rows, limited to its last `days` days (None = all)."""
+    rows = daily.loc[daily["spot"] == spot]
+    if days is None or rows.empty:
+        return rows
+    cutoff = rows["day"].max() - pd.Timedelta(days=days - 1)
+    return rows.loc[rows["day"] >= cutoff]
