@@ -1,0 +1,61 @@
+name: Daily pipeline
+
+# Runs the real Airflow DAGs once a day with `airflow dags test` (no long-running
+# scheduler needed) and publishes to S3. Re-processing the last few days is safe
+# because every step is idempotent, and it self-heals any day a run missed.
+
+on:
+  schedule:
+    - cron: "30 1 * * *" # 01:30 UTC, after the previous UTC day is complete
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "How many past days to (re)process"
+        required: false
+        default: "3"
+
+permissions:
+  contents: read
+  id-token: write # lets the job request a GitHub OIDC token for AWS
+
+concurrency:
+  group: daily-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SURF_BUCKET: ${{ vars.SURF_BUCKET }}
+      SURF_PUBLISH_SOURCE: github-actions
+      DAYS: ${{ inputs.days || '3' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: scripts/setup.sh
+
+      - name: Assume the publisher role via OIDC (no stored AWS keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Install Airflow
+        run: ./scripts/setup.sh
+
+      - name: Run 02_surf_etl for the last ${{ env.DAYS }} days
+        run: |
+          source env.sh
+          for offset in $(seq "$DAYS" -1 1); do
+            day=$(date -u -d "$offset days ago" +%F)
+            echo "::group::02_surf_etl $day"
+            airflow dags test 02_surf_etl "$day"
+            echo "::endgroup::"
+          done
+
+      - name: Run 04_publish_snapshot (S3)
+        run: source env.sh && airflow dags test 04_publish_snapshot

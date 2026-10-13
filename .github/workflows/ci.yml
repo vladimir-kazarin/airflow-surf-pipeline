@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    name: Airflow DAGs + pipeline logic
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: scripts/setup.sh
+      - name: Install Airflow (pinned with official constraints)
+        run: ./scripts/setup.sh
+      - name: Unit + DAG integrity tests
+        run: source env.sh && pytest tests
+
+  app:
+    name: Streamlit dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: app/requirements.txt
+      - name: Install exactly what Streamlit Cloud installs
+        run: |
+          uv venv --python 3.12 .venv-app
+          uv pip install --python .venv-app/bin/python -r app/requirements.txt pytest
+      - name: Transform tests + headless app smoke test (bundled snapshot, no AWS)
+        run: .venv-app/bin/pytest app/tests
+
+  terraform:
+    name: Terraform fmt + validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate

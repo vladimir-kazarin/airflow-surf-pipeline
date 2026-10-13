@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-10-13T23:01:53+00:00",
+  "source": "local",
+  "run_id": "asset_triggered__2026-10-13T23:01:06.264453+00:00_e34Wkfj9",
+  "first_day": "2026-07-01",
+  "last_day": "2026-10-12",
+  "days": 104,
+  "spots": [
+    "Cocoa Beach",
+    "Montauk",
+    "Outer Banks",
+    "Rockaway"
+  ],
+  "rows": 9984
+}

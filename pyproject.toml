@@ -1,0 +1,18 @@
+[project]
+name = "surf-airflow"
+version = "0.1.0"
+description = "Learning Apache Airflow with a surf-conditions pipeline"
+requires-python = ">=3.12"
+# Installed with Airflow's constraints file for reproducible versions; see scripts/setup.sh
+dependencies = [
+    "apache-airflow==3.3.2",
+    "apache-airflow-providers-http",
+    "apache-airflow-providers-sqlite",
+    "apache-airflow-providers-amazon",
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["dags", "app"]  # same as Airflow does at runtime, so `import surf_lib` works
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]

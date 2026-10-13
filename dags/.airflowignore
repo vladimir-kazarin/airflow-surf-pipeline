@@ -1,0 +1,3 @@
+# Files/folders matching these regexes are NOT parsed as DAG files.
+# surf_lib is plain helper code imported by the DAGs; skipping it saves parse time.
+surf_lib/

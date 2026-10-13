@@ -1,0 +1,12 @@
+.venv/
+.airflow/
+data/
+__pycache__/
+.pytest_cache/
+.env.local
+.venv-app/
+.streamlit/secrets.toml
+infra/.terraform/
+infra/*.tfstate*
+infra/*.tfplan
+infra/terraform.tfvars
