@@ -90,7 +90,7 @@ data "aws_iam_policy_document" "github_trust" {
     condition {
       test     = "StringEquals"
       variable = "${local.github_oidc}:sub"
-      values   = ["repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"]
+      values   = ["${var.github_subject_prefix}:ref:refs/heads/${var.github_branch}"]
     }
   }
 }

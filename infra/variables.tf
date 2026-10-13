@@ -14,10 +14,14 @@ variable "project" {
   default = "airflow-surf-pipeline"
 }
 
-variable "github_repo" {
-  description = "owner/name of the repo whose GitHub Actions may publish to the bucket."
+variable "github_subject_prefix" {
+  description = <<-EOT
+    OIDC `sub` prefix of the repo allowed to publish. GitHub's immutable format embeds the
+    owner and repo IDs, so a deleted-and-recreated repo with the same name can't assume the
+    role. Find yours with: gh api repos/OWNER/REPO/actions/oidc/customization/sub
+  EOT
   type        = string
-  default     = "vladimir-kazarin/airflow-surf-pipeline"
+  default     = "repo:vladimir-kazarin@18403526/airflow-surf-pipeline@1418119502"
 }
 
 variable "github_branch" {

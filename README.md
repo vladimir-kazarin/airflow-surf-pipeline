@@ -111,8 +111,8 @@ with exercises.
 
 ## Deploy your own
 
-1. `cd infra && terraform apply -var github_repo=<you>/<repo>`. If your AWS account has no
-   GitHub OIDC provider yet, add `-var create_github_oidc_provider=true`.
+1. `cd infra && terraform apply -var github_subject_prefix="$(gh api repos/<you>/<repo>/actions/oidc/customization/sub -q .sub_claim_prefix)"`.
+   If your AWS account has no GitHub OIDC provider yet, add `-var create_github_oidc_provider=true`.
 2. GitHub repo variables: `AWS_ROLE_ARN` (output `github_publisher_role_arn`) and
    `SURF_BUCKET` (output `bucket_name`).
 3. Seed history: run the **Daily pipeline** workflow manually with `days: 90`.
